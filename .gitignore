@@ -4,9 +4,6 @@ node_modules/
 # Archivos de entorno
 .env
 
-# Base de datos SQLite
-*.sqlite
-*.sqlite3
 
 # Logs
 logs
