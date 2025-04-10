@@ -1,0 +1,25 @@
+# Dependencias
+node_modules/
+
+# Archivos de entorno
+.env
+
+# Base de datos SQLite
+*.sqlite
+*.sqlite3
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Directorios de caché
+.npm
+.eslintcache
+
+# Archivos temporales
+.DS_Store
+Thumbs.db
+
+# Directorio de uploads (si contiene datos sensibles)
+# uploads/
