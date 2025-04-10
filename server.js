@@ -86,10 +86,10 @@ app.use('/api/canciones', cancionRoutes);
 // Servir archivos estáticos en producción
 if (process.env.NODE_ENV === 'production') {
   // Asegúrate de que esta ruta sea correcta para tu caso
-  app.use(express.static(path.join(__dirname, './frontend/dist/frontend/browser')));
+  app.use(express.static(path.join(__dirname, './front/dist/frontend/browser')));
   
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, './frontend/dist/frontend/browser/index.csr.html'));
+    res.sendFile(path.join(__dirname, './front/dist/frontend/browser/index.csr.html'));
   });
 }
 
