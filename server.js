@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors({
-  origin: ['**'],
+  origin: ['https://iglesiacri.com/portal/, https://iglesiacri.com/portal'],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
