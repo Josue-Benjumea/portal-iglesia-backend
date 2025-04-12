@@ -176,16 +176,126 @@ router.get('/:id/canciones', verifyToken, (req, res) => {
   }
 });
 
-// Actualizar el estado de un repertorio
+// Update the route that updates repertoire status
 router.put('/:id/estado', verifyToken, (req, res) => {
   try {
-    const repertorioId = req.params.id;
+    const { id } = req.params;
     const { estado } = req.body;
     
-    // Validar datos
-    if (!estado || !['pendiente', 'en_proceso', 'listo'].includes(estado)) {
-      return res.status(400).json({ error: 'Estado inválido' });
+    if (!estado) {
+      return res.status(400).json({ error: 'Estado es requerido' });
     }
+    
+    // Update the repertoire status
+    db.run(
+      'UPDATE repertorios SET estado = ? WHERE id = ?',
+      [estado, id],
+      function(err) {
+        if (err) {
+          return res.status(500).json({ error: err.message });
+        }
+        
+        if (this.changes === 0) {
+          return res.status(404).json({ error: 'Repertorio no encontrado' });
+        }
+        
+        res.json({ 
+          id, 
+          estado,
+          mensaje: 'Estado del repertorio actualizado correctamente' 
+        });
+      }
+    );
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+     // Update the route that gets ready repertoires
+        router.get('/listos', verifyToken, (req, res) => {
+          try {
+            // Modify the SQL query to correctly filter by estado='listo'
+            db.all(`
+              SELECT r.*, u.nombre, u.apellido 
+              FROM repertorios r
+              JOIN usuarios u ON r.usuario_id = u.id
+              WHERE r.estado = 'listo'
+              ORDER BY r.fecha_programada DESC
+            `, [], (err, rows) => {
+              if (err) {
+                return res.status(500).json({ error: err.message });
+              }
+              
+              res.json(rows);
+            });
+          } catch (error) {
+            res.status(500).json({ error: error.message });
+          }
+        });
+      
+
+      
+// Ruta para eliminar un repertorio
+router.delete('/:id', verifyToken, async (req, res) => {
+  const repertorioId = req.params.id;
+  
+  try {
+    // Primero, verificamos si el repertorio existe
+    const repertorio = await db.get('SELECT * FROM repertorios WHERE id = ?', [repertorioId]);
+    
+    if (!repertorio) {
+      return res.status(404).json({ error: 'Repertorio no encontrado' });
+    }
+    
+    // Obtenemos todas las canciones con sus diapositivas
+    const canciones = await db.all('SELECT id, titulo, artista, diapositivas FROM canciones WHERE repertorio_id = ?', [repertorioId]);
+    
+    // Verificamos si canciones es un array y tiene elementos
+    if (Array.isArray(canciones) && canciones.length > 0) {
+      // Para cada canción, guardamos sus diapositivas en la tabla de diapositivas_guardadas
+      for (const cancion of canciones) {
+        if (cancion.diapositivas) {
+          try {
+            // Verificamos si ya existe una entrada para esta canción
+            const existente = await db.get(
+              'SELECT id FROM diapositivas_guardadas WHERE titulo = ? AND artista = ?', 
+              [cancion.titulo, cancion.artista]
+            );
+            
+            if (existente) {
+              // Actualizamos las diapositivas existentes
+              await db.run(
+                'UPDATE diapositivas_guardadas SET diapositivas = ? WHERE id = ?',
+                [cancion.diapositivas, existente.id]
+              );
+            } else {
+              // Insertamos nuevas diapositivas
+              await db.run(
+                'INSERT INTO diapositivas_guardadas (titulo, artista, diapositivas) VALUES (?, ?, ?)',
+                [cancion.titulo, cancion.artista, cancion.diapositivas]
+              );
+            }
+          } catch (error) {
+            console.error(`Error al guardar diapositivas para canción ${cancion.id}:`, error);
+          }
+        }
+      }
+    }
+    
+    // Eliminamos el repertorio
+    await db.run('DELETE FROM repertorios WHERE id = ?', [repertorioId]);
+    
+    res.json({ message: 'Repertorio eliminado correctamente' });
+  } catch (error) {
+    console.error('Error al eliminar repertorio:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+      // Obtener una canción específica de un repertorio
+router.get('/:repertorioId/canciones/:cancionId', verifyToken, (req, res) => {
+  try {
+    const { repertorioId, cancionId } = req.params;
     
     // Verificar si el repertorio existe
     db.get('SELECT * FROM repertorios WHERE id = ?', [repertorioId], (err, repertorio) => {
@@ -197,20 +307,17 @@ router.put('/:id/estado', verifyToken, (req, res) => {
         return res.status(404).json({ error: 'Repertorio no encontrado' });
       }
       
-      // Actualizar el estado del repertorio
-      db.run('UPDATE repertorios SET estado = ? WHERE id = ?', [estado, repertorioId], function(err) {
+      // Obtener la canción específica
+      db.get('SELECT * FROM canciones WHERE repertorio_id = ? AND id = ?', [repertorioId, cancionId], (err, cancion) => {
         if (err) {
           return res.status(500).json({ error: err.message });
         }
         
-        if (this.changes === 0) {
-          return res.status(404).json({ error: 'Repertorio no encontrado' });
+        if (!cancion) {
+          return res.status(404).json({ error: 'Canción no encontrada' });
         }
         
-        res.json({
-          id: repertorioId,
-          estado
-        });
+        res.json(cancion);
       });
     });
   } catch (error) {

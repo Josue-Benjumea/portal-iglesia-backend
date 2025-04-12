@@ -228,4 +228,154 @@ router.put('/:id/letra', verifyToken, (req, res) => {
   }
 });
 
+
+// Guardar diapositivas para una canción
+router.post('/diapositivas', verifyToken, (req, res) => {
+  const { titulo, artista, letra, diapositivas, cancion_id } = req.body;
+  
+  if (!titulo || !artista) {
+    return res.status(400).json({ error: 'Título y artista son requeridos' });
+  }
+  
+  if (!cancion_id) {
+    return res.status(400).json({ error: 'ID de canción es requerido' });
+  }
+  
+  // Convertir el array de diapositivas a JSON para almacenarlo
+  const diapositivasJSON = JSON.stringify(diapositivas);
+  
+  // Actualizar directamente en la tabla canciones
+  db.get('SELECT id FROM canciones WHERE id = ?', [cancion_id], (err, row) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    
+    if (!row) {
+      return res.status(404).json({ error: 'Canción no encontrada' });
+    }
+    
+    // Actualizar diapositivas en la tabla canciones
+    db.run(`
+      UPDATE canciones 
+      SET letra = ?, diapositivas = ?, estado = 'lista'
+      WHERE id = ?
+    `, [letra, diapositivasJSON, cancion_id], function(err) {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      
+      res.json({ 
+        id: cancion_id, 
+        mensaje: 'Diapositivas guardadas correctamente' 
+      });
+    });
+  });
+});
+
+
+// Obtener diapositivas de una canción
+router.get('/diapositivas', (req, res) => {
+  const { titulo, artista, cancion_id } = req.query;
+  
+  let query = '';
+  let params = [];
+  
+  if (cancion_id) {
+    query = 'SELECT id, titulo, artista, letra, diapositivas FROM canciones WHERE id = ?';
+    params = [cancion_id];
+  } else if (titulo && artista) {
+    query = 'SELECT id, titulo, artista, letra, diapositivas FROM canciones WHERE titulo = ? AND artista = ?';
+    params = [titulo, artista];
+  } else {
+    return res.status(400).json({ error: 'Se requiere cancion_id o título y artista' });
+  }
+  
+  db.get(query, params, (err, row) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    
+    if (!row) {
+      return res.status(404).json({ error: 'No se encontraron diapositivas para esta canción' });
+    }
+    
+    // Convertir el JSON almacenado de vuelta a un array
+    try {
+      if (row.diapositivas) {
+        row.diapositivas = JSON.parse(row.diapositivas);
+      } else {
+        row.diapositivas = [];
+      }
+      res.json(row);
+    } catch (error) {
+      res.status(500).json({ error: 'Error al procesar las diapositivas: ' + error.message });
+    }
+  });
+});
+
+
+// Eliminar diapositivas de una canción
+router.delete('/diapositivas/:id', verifyToken, (req, res) => {
+  const { id } = req.params;
+  
+  // Actualizar la canción para eliminar las diapositivas
+  db.run('UPDATE canciones SET diapositivas = NULL WHERE id = ?', [id], function(err) {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    
+    if (this.changes === 0) {
+      return res.status(404).json({ error: 'No se encontró la canción con ese ID' });
+    }
+    
+    res.json({ mensaje: 'Diapositivas eliminadas correctamente' });
+  });
+});
+
+// Update the route that handles saving diapositivas
+router.put('/:id/letra', verifyToken, async (req, res) => {
+  const cancionId = req.params.id;
+  const { letra, diapositivas } = req.body;
+  
+  try {
+    // First, update the cancion record
+    await db.run(
+      'UPDATE canciones SET letra = ?, diapositivas = ? WHERE id = ?',
+      [letra, JSON.stringify(diapositivas), cancionId]
+    );
+    
+    // Get the cancion details to save to diapositivas_guardadas
+    const cancion = await db.get('SELECT titulo, artista FROM canciones WHERE id = ?', [cancionId]);
+    
+    if (cancion) {
+      // Check if this song already exists in diapositivas_guardadas
+      const existingDiapositiva = await db.get(
+        'SELECT id FROM diapositivas_guardadas WHERE titulo = ? AND artista = ?',
+        [cancion.titulo, cancion.artista]
+      );
+      
+      if (existingDiapositiva) {
+        // Update existing record
+        await db.run(
+          'UPDATE diapositivas_guardadas SET diapositivas = ? WHERE id = ?',
+          [JSON.stringify(diapositivas), existingDiapositiva.id]
+        );
+        console.log(`Updated diapositivas for ${cancion.titulo} by ${cancion.artista} in diapositivas_guardadas`);
+      } else {
+        // Insert new record
+        await db.run(
+          'INSERT INTO diapositivas_guardadas (titulo, artista, diapositivas) VALUES (?, ?, ?)',
+          [cancion.titulo, cancion.artista, JSON.stringify(diapositivas)]
+        );
+        console.log(`Saved diapositivas for ${cancion.titulo} by ${cancion.artista} to diapositivas_guardadas`);
+      }
+    }
+    
+    res.json({ message: 'Canción actualizada correctamente' });
+  } catch (error) {
+    console.error('Error al actualizar canción:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

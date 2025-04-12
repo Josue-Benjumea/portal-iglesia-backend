@@ -32,43 +32,87 @@ const db = new sqlite3.Database('./database.sqlite', (err) => {
 
 // Inicializar la base de datos
 function initializeDatabase() {
+  // Add this near the beginning of your server.js file, after initializing the database
+  
+  // Ensure required tables exist
   db.serialize(() => {
-    // Tabla de usuarios
-    db.run(`CREATE TABLE IF NOT EXISTS usuarios (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      cedula TEXT UNIQUE NOT NULL,
-      nombre TEXT NOT NULL,
-      apellido TEXT NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      password TEXT NOT NULL,
-      ministerio TEXT NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )`);
-
-    // Tabla de repertorios
-    db.run(`CREATE TABLE IF NOT EXISTS repertorios (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      fecha_programada DATE NOT NULL,
-      usuario_id INTEGER NOT NULL,
-      estado TEXT DEFAULT 'pendiente',
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
-    )`);
-
-    // Tabla de canciones
-    db.run(`CREATE TABLE IF NOT EXISTS canciones (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      repertorio_id INTEGER NOT NULL,
-      titulo TEXT NOT NULL,
-      artista TEXT NOT NULL,
-      letra TEXT,
-      diapositivas TEXT,
-      estado TEXT DEFAULT 'pendiente',
-      FOREIGN KEY (repertorio_id) REFERENCES repertorios (id)
-    )`);
-
-    console.log('Base de datos inicializada');
+    // Check and create diapositivas table if it doesn't exist
+    db.run(`
+      CREATE TABLE IF NOT EXISTS diapositivas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cancion_id INTEGER NOT NULL,
+        contenido TEXT,
+        estilo TEXT,
+        orden INTEGER,
+        fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (cancion_id) REFERENCES canciones(id) ON DELETE CASCADE
+      )
+    `);
+    
+    // Check and create diapositivas_canciones table if it doesn't exist
+    db.run(`
+      CREATE TABLE IF NOT EXISTS diapositivas_canciones (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cancion_id INTEGER NOT NULL,
+        titulo TEXT NOT NULL,
+        artista TEXT NOT NULL,
+        letra TEXT,
+        diapositivas TEXT,
+        fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (cancion_id) REFERENCES canciones(id) ON DELETE CASCADE
+      )
+    `);
+    
+    // Add this new block to create the diapositivas_guardadas table
+    db.run(`
+      CREATE TABLE IF NOT EXISTS diapositivas_guardadas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        titulo TEXT NOT NULL,
+        artista TEXT NOT NULL,
+        diapositivas TEXT,
+        fecha_guardado TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(titulo, artista)
+      )
+    `);
   });
+
+  // Tabla de usuarios
+  db.run(`CREATE TABLE IF NOT EXISTS usuarios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cedula TEXT UNIQUE NOT NULL,
+    nombre TEXT NOT NULL,
+    apellido TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password TEXT NOT NULL,
+    ministerio TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )`);
+  
+  // Tabla de repertorios
+  db.run(`CREATE TABLE IF NOT EXISTS repertorios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha_programada DATE NOT NULL,
+    usuario_id INTEGER NOT NULL,
+    estado TEXT DEFAULT 'pendiente',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
+  )`);
+  
+  // Tabla de canciones
+  db.run(`CREATE TABLE IF NOT EXISTS canciones (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    repertorio_id INTEGER NOT NULL,
+    titulo TEXT NOT NULL,
+    artista TEXT NOT NULL,
+    letra TEXT,
+    diapositivas TEXT,
+    estado TEXT DEFAULT 'pendiente',
+    FOREIGN KEY (repertorio_id) REFERENCES repertorios (id)
+  )`);
+  
+  console.log('Base de datos inicializada');
 }
 
 // Exportar la conexión a la base de datos para usarla en las rutas
@@ -78,10 +122,12 @@ module.exports = db;
 const authRoutes = require('./routes/auth');
 const repertorioRoutes = require('./routes/repertorios');
 const cancionRoutes = require('./routes/canciones');
+const diapositivasRoutes = require('./routes/diapositivas');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/repertorios', repertorioRoutes);
 app.use('/api/canciones', cancionRoutes);
+app.use('/api/diapositivas', diapositivasRoutes);
 
 // Servir archivos estáticos en producción
 if (process.env.NODE_ENV === 'production') {
